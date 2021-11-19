@@ -34,7 +34,7 @@ class HriEnv_v1(gym.Env):
         self.flags = p.URDF_ENABLE_CACHED_GRAPHICS_SHAPES
         self.panda_joint_num = 9
         self.joint_list = range(self.panda_joint_num)
-        p.connect(p.GUI)
+        p.connect(p.DIRECT)
         self.kinematics = Kinematics()
 
     def reset(self):
@@ -68,23 +68,17 @@ class HriEnv_v1(gym.Env):
         self.task_index = np.random.choice(range(self.task_num))
         self.x_d = self.x_g[self.task_index, :]
 
+        return self.ee_vel_array.reshape(-1)
+
     def step(self, b_list):
         self.f_h = self.human_dynamics(self.ee_pos_array, self.ee_vel_array)
-        print('f_h')
-        print(self.f_h)
         # self.f_h = np.array([0., 0., 0.]).reshape(3, 1)
 
         dx_d = self.task_combination(b_list, self.ee_pos_array.reshape(-1)).reshape(3, 1)
         # dx_d = np.array([0., 0., 0.]).reshape(3, 1)
-        print('dx_d')
-        print(dx_d)
 
         acc = self.robot_controller(self.f_h, dx_d, self.ee_vel_array)
         newd_x = self.ee_vel_array + acc * self.dt
-        print('acc')
-        print(acc)
-        print('newd_x')
-        print(newd_x)
 
         pos_vel = newd_x.reshape(-1)
         orn_vel = [0., 0., 0.]
@@ -106,8 +100,9 @@ class HriEnv_v1(gym.Env):
         for i in range(self.task_num):
             cov_b += b_list[i] * (1 - b_list[i]) * \
                      np.sum(self.ds(self.x_g[i, :], ee_pos_array.reshape(-1)) ** 2)
-        loss = np.sum((dx_d - self.ee_vel_array) ** 2) + cov_b
-        return loss
+        r = -np.sum((dx_d - self.ee_vel_array) ** 2) - cov_b
+
+        return  self.ee_vel_array.reshape(-1), r
 
     def human_dynamics(self, x, d_x):
         h_h = -np.matmul(self.d_h_matrix, d_x) + np.matmul(self.k_h_matrix, self.x_d.reshape(3, 1) - x)
